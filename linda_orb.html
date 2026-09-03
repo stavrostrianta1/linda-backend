@@ -427,7 +427,7 @@ let slideTimer;
 
 async function fetchMode() {
   try {
-    const res = await fetch('/mode');
+    const res = await fetch('/mode', { cache: 'no-store' });
     const data = await res.json();
     return data.mode || 'linda';
   } catch (e) {

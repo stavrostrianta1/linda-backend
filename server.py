@@ -22,7 +22,7 @@ import os
 import json
 
 from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 
@@ -284,7 +284,10 @@ async def admin_page():
 
 @app.get("/mode")
 async def get_mode():
-    return current_mode
+    return JSONResponse(
+        content=current_mode,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.post("/set-mode")

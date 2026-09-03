@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Linda Kiosk - Admin</title>
+<style>
+  body {
+    margin:0; padding:40px; background:#0a0e12; color:#fff;
+    font-family: -apple-system, sans-serif; display:flex; flex-direction:column;
+    align-items:center; min-height:100vh;
+  }
+  h1 { color:#7fd4e8; }
+  input {
+    padding:12px; font-size:16px; border-radius:8px; border:1px solid #444;
+    background:#1a1e22; color:#fff; margin-bottom:20px; width:250px;
+  }
+  .buttons { display:flex; gap:16px; }
+  button {
+    padding:16px 28px; font-size:16px; border-radius:10px; border:none;
+    cursor:pointer; font-weight:bold;
+  }
+  #btn-linda { background:#7fd4e8; color:#04141c; }
+  #btn-slideshow { background:#f2c94c; color:#241c00; }
+  #status { margin-top:24px; font-size:14px; color:#9aa; }
+  #current-mode { margin-top:10px; font-size:18px; }
+</style>
+</head>
+<body>
+
+<h1>Linda Kiosk -- Admin</h1>
+
+<input type="password" id="admin-key" placeholder="Admin key">
+
+<div class="buttons">
+  <button id="btn-linda" onclick="setMode('linda')">Linda mode</button>
+  <button id="btn-slideshow" onclick="setMode('slideshow')">Slideshow mode</button>
+</div>
+
+<div id="current-mode">Current mode: <span id="mode-value">loading...</span></div>
+<div id="status"></div>
+
+<script>
+async function refreshMode() {
+  try {
+    const res = await fetch('/mode');
+    const data = await res.json();
+    document.getElementById('mode-value').textContent = data.mode;
+  } catch (e) {
+    document.getElementById('mode-value').textContent = 'error';
+  }
+}
+
+async function setMode(mode) {
+  const key = document.getElementById('admin-key').value;
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = 'Setting mode...';
+
+  const formData = new FormData();
+  formData.append('mode', mode);
+  formData.append('key', key);
+
+  try {
+    const res = await fetch('/set-mode', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) {
+      statusEl.textContent = 'Error: ' + data.error;
+    } else {
+      statusEl.textContent = 'Mode set to: ' + data.mode;
+      refreshMode();
+    }
+  } catch (e) {
+    statusEl.textContent = 'Network error';
+  }
+}
+
+refreshMode();
+</script>
+</body>
+</html>

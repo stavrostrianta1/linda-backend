@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Linda - Hebden Bridge Town Hall</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; background:#000; overflow:hidden; height:100%; }
+  canvas { display:block; }
+
+  #idle-screen {
+    position:fixed; inset:0; background:#000; z-index:5;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family: 'Poppins', sans-serif; color:#fff; text-align:center;
+  }
+  #idle-text { font-size:58px; margin-bottom:28px; line-height:1.4; }
+  #idle-hint { font-size:24px; color:#7fd4e8; letter-spacing:1px; }
+
+  #buttons {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    z-index:10; font-family: 'Poppins', sans-serif; display:none;
+  }
+  .legend-item {
+    display:inline-block; margin:0 6px; padding:10px 16px;
+    background:#111; border:1px solid #444; border-radius:8px;
+    font-size:14px; user-select:none;
+  }
+
+  #accessibility-btn {
+    position:fixed; top:20px; right:20px; z-index:20; display:none;
+    padding:12px 18px; background:#111; color:#cfe6ee;
+    border:1px solid #7fd4e8; border-radius:10px;
+    font-family: 'Poppins', sans-serif; font-size:14px; cursor:pointer;
+  }
+  #accessibility-btn:hover { background:#1a2a30; }
+
+  #subtitle-box {
+    position:relative; width:90%; max-width:950px; margin:0 auto 16px;
+    z-index:15;
+  }
+  #subtitle-label {
+    text-align:center; color:#7fd4e8; font-family: 'Poppins', sans-serif;
+    font-size:16px; margin-bottom:8px; letter-spacing:1px;
+  }
+  #subtitle-area {
+    background:rgba(10,14,18,0.85); border:2px solid #7fd4e8; border-radius:14px;
+    padding:16px 22px; text-align:center;
+    color:#fff; font-family: 'Poppins', sans-serif; font-size:19px; line-height:1.4;
+    text-shadow: 0 2px 6px #000;
+  }
+  #subtitle-box.floating {
+    position:fixed; top:66%; left:50%; transform:translateX(-50%);
+    pointer-events:none; margin:0;
+  }
+
+  #keyboard-overlay {
+    display:none; position:fixed; bottom:0; left:0; width:100%;
+    background:rgba(10,14,18,0.96); border-top:1px solid #333;
+    padding:16px 0 20px; z-index:20; font-family: 'Poppins', sans-serif;
+  }
+  #text-input {
+    display:block; margin:0 auto 12px; width:80%; max-width:700px;
+    padding:14px; font-size:20px; border-radius:8px; border:1px solid #555;
+    background:#111; color:#fff;
+  }
+  .kb-row { display:flex; justify-content:center; margin-bottom:8px; }
+  .kb-key {
+    margin:0 4px; padding:14px 0; width:52px; text-align:center;
+    background:#1c1c1c; color:#fff; border:1px solid #444; border-radius:6px;
+    font-size:16px; cursor:pointer;
+  }
+  .kb-key:hover { background:#2a2a2a; }
+  .kb-space { width:220px; }
+  #kb-controls { display:flex; justify-content:center; gap:10px; margin-bottom:14px; }
+  .kb-control-btn {
+    padding:8px 16px; background:#1c1c1c; color:#cfe6ee;
+    border:1px solid #555; border-radius:8px; font-size:13px; cursor:pointer;
+    font-family: 'Poppins', sans-serif;
+  }
+  .kb-control-btn:hover { background:#2a2a2a; }
+  #send-btn {
+    display:block; margin:12px auto 0; padding:12px 30px;
+    background:#7fd4e8; color:#04141c; border:none; border-radius:8px;
+    font-size:16px; font-weight:bold; cursor:pointer;
+  }
+
+  #mic-status {
+    position:fixed; top:16px; left:50%; transform:translateX(-50%);
+    color:#7fd4e8; font-family: 'Poppins', sans-serif; font-size:13px; z-index:25;
+    opacity:0; transition: opacity 0.4s; pointer-events:none;
+  }
+
+  #slideshow-screen {
+    display:none; position:fixed; inset:0; background:#000; z-index:6;
+    align-items:center; justify-content:center;
+  }
+  #slideshow-img {
+    max-width:100%; max-height:100%; object-fit:contain;
+  }
+</style>
+</head>
+<body>
+
+<div id="idle-screen">
+  <div id="idle-text">Hi, I'm Linda,<br>an AI assistant.</div>
+  <div id="idle-hint">Tap anywhere to begin</div>
+</div>
+
+<div id="slideshow-screen">
+  <img id="slideshow-img" src="" alt="">
+</div>
+
+<div id="mic-status"></div>
+
+<button id="accessibility-btn" onclick="startAccessibilityMode()">🦻 I'm deaf / hard of hearing</button>
+
+<div id="subtitle-box" class="floating" style="display:none;">
+  <div id="subtitle-label">LINDA SAYS:</div>
+  <div id="subtitle-area"></div>
+</div>
+
+<div id="buttons">
+  <span style="border-color:#7fd4e8; color:#7fd4e8;" class="legend-item">Listening</span>
+  <span style="border-color:#f2c94c; color:#f2c94c;" class="legend-item">Thinking</span>
+  <span style="border-color:#6fcf97; color:#6fcf97;" class="legend-item">Speaking</span>
+</div>
+
+<div id="keyboard-overlay">
+  <div id="kb-controls">
+    <button class="kb-control-btn" onclick="exitAccessibilityMode()">↩ Back to normal (voice)</button>
+  </div>
+  <input id="text-input" type="text" placeholder="Type your question here..." readonly>
+  <div id="virtual-keyboard"></div>
+  <button id="send-btn" onclick="sendTextInput()">Send</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// ΡΥΘΜΙΣΕΙΣ
+// ============================================================
+const WELCOME_TEXT = "How can I help you today?";
+const CLOSING_TEXT = "Thank you for visiting! Have a lovely day.";
+
+const SILENCE_THRESHOLD = 0.025;     // πόσο "δυνατά" πρέπει να μιλήσει για να μετρήσει ως ομιλία
+const SILENCE_DURATION_MS = 1400;    // πόση σιωπή ΜΕΤΑ από ομιλία σταματάει την εγγραφή
+const NO_SPEECH_TIMEOUT_MS = 8000;   // αν δεν πει ΤΙΠΟΤΑ μέσα σε τόσο, κλείνει η συνομιλία
+const MAX_RECORD_MS = 15000;         // ανώτατο όριο μιας εγγραφής
+
+// ============================================================
+// Orb (ίδιο 3D visual με πριν)
+// ============================================================
+const STATE_COLORS = {
+  idle:      new THREE.Color(0x3a4a55),
+  listening: new THREE.Color(0x7fd4e8),
+  thinking:  new THREE.Color(0xf2c94c),
+  speaking:  new THREE.Color(0x6fcf97),
+};
+
+let currentState = 'idle';
+function setState(s) {
+  currentState = s;
+  const idleScreen = document.getElementById('idle-screen');
+  const isIdle = (s === 'idle');
+  idleScreen.style.display = isIdle ? 'flex' : 'none';
+  document.getElementById('buttons').style.display = isIdle ? 'none' : 'block';
+  const accBtn = document.getElementById('accessibility-btn');
+  if (isIdle) {
+    accBtn.style.display = 'none';
+  } else if (document.getElementById('keyboard-overlay').style.display !== 'block') {
+    accBtn.style.display = 'block';
+  }
+}
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.z = 5;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const POINT_COUNT = 7000;
+const positions = new Float32Array(POINT_COUNT * 3);
+const golden = Math.PI * (3 - Math.sqrt(5));
+for (let i = 0; i < POINT_COUNT; i++) {
+  const y = 1 - (i / (POINT_COUNT - 1)) * 2;
+  const radiusAtY = Math.sqrt(1 - y * y);
+  const theta = golden * i;
+  positions[i * 3] = Math.cos(theta) * radiusAtY * 1.8;
+  positions[i * 3 + 1] = y * 1.8;
+  positions[i * 3 + 2] = Math.sin(theta) * radiusAtY * 1.8;
+}
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const material = new THREE.PointsMaterial({
+  color: STATE_COLORS.idle, size: 0.024, transparent: true, opacity: 0.75,
+  blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const sphere = new THREE.Points(geometry, material);
+sphere.position.y = 0.6;
+sphere.scale.set(0.82, 0.82, 0.82);
+scene.add(sphere);
+
+function animate() {
+  requestAnimationFrame(animate);
+  const targetColor = STATE_COLORS[currentState] || STATE_COLORS.idle;
+  material.color.lerp(targetColor, 0.06);
+  sphere.rotation.y += 0.004;
+  sphere.rotation.x += 0.0012;
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// Υπότιτλοι
+// ============================================================
+function showSubtitle(text) {
+  const box = document.getElementById('subtitle-box');
+  const area = document.getElementById('subtitle-area');
+  area.textContent = text;
+  box.style.display = 'block';
+}
+
+function clearSubtitle() {
+  document.getElementById('subtitle-box').style.display = 'none';
+  document.getElementById('subtitle-area').textContent = '';
+}
+
+// ============================================================
+// Συνομιλία -- ηχογράφηση (όχι speech recognition, δεν δουλεύει σε iPad Safari)
+// ============================================================
+let conversationHistory = [];
+let mediaRecorder, audioChunks, audioContext, analyser, dataArray;
+let silenceTimer, noSpeechTimer, maxTimer;
+let hasSpoken = false;
+
+function pickMimeType() {
+  const candidates = ['audio/mp4', 'audio/webm', 'audio/aac'];
+  for (const c of candidates) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return '';
+}
+
+async function startListening() {
+  setState('listening');
+  hasSpoken = false;
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    console.warn('Δεν δόθηκε άδεια μικροφώνου', e);
+    goIdle();
+    return;
+  }
+
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioContext.createMediaStreamSource(stream);
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 512;
+  source.connect(analyser);
+  dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  const mimeType = pickMimeType();
+  mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  audioChunks = [];
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    stream.getTracks().forEach((t) => t.stop());
+    if (audioContext) audioContext.close();
+    if (hasSpoken && audioChunks.length > 0) {
+      sendToBackend({ audioBlob: new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' }) });
+    } else {
+      speakReply(CLOSING_TEXT, true);
+    }
+  };
+  mediaRecorder.start();
+
+  noSpeechTimer = setTimeout(() => { if (!hasSpoken) stopRecording(); }, NO_SPEECH_TIMEOUT_MS);
+  maxTimer = setTimeout(stopRecording, MAX_RECORD_MS);
+
+  monitorVolume();
+}
+
+function monitorVolume() {
+  if (!analyser || !mediaRecorder || mediaRecorder.state !== 'recording') return;
+  analyser.getByteTimeDomainData(dataArray);
+  let sum = 0;
+  for (let i = 0; i < dataArray.length; i++) {
+    const v = (dataArray[i] - 128) / 128;
+    sum += v * v;
+  }
+  const rms = Math.sqrt(sum / dataArray.length);
+
+  if (rms > SILENCE_THRESHOLD) {
+    hasSpoken = true;
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(stopRecording, SILENCE_DURATION_MS);
+  }
+  requestAnimationFrame(monitorVolume);
+}
+
+function stopRecording() {
+  clearTimeout(noSpeechTimer);
+  clearTimeout(maxTimer);
+  clearTimeout(silenceTimer);
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+}
+
+async function sendToBackend({ audioBlob, textInput }) {
+  setState('thinking');
+  const formData = new FormData();
+  formData.append('history', JSON.stringify(conversationHistory));
+  if (audioBlob) {
+    formData.append('audio', audioBlob, 'speech.webm');
+  } else {
+    formData.append('text', textInput);
+  }
+
+  try {
+    const res = await fetch('/converse', { method: 'POST', body: formData });
+    const data = await res.json();
+    conversationHistory = data.history || [];
+    handleActions(data.actions);
+
+    if (data.reply_text) {
+      speakReply(data.reply_text, false);
+    } else if (audioBlob) {
+      // Δεν κατάλαβε τίποτα -- ξανακούει χωρίς να πει τίποτα
+      startListening();
+    }
+  } catch (e) {
+    console.error('[backend error]', e);
+    showSubtitle("Sorry, I'm having trouble connecting right now.");
+    goIdle();
+  }
+}
+
+let cachedVoices = [];
+function loadVoices() { cachedVoices = speechSynthesis.getVoices(); }
+loadVoices();
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+function pickBritishFemaleVoice() {
+  const voices = cachedVoices.length ? cachedVoices : speechSynthesis.getVoices();
+  const gbVoices = voices.filter((v) => v.lang === 'en-GB' || v.lang === 'en_GB');
+
+  // Γνωστές γυναικείες en-GB φωνές (Safari/iOS: Kate, Serena, Martha -- Chrome: Google UK English Female)
+  const preferredNames = ['serena', 'kate', 'martha', 'google uk english female'];
+  for (const name of preferredNames) {
+    const match = gbVoices.find((v) => v.name.toLowerCase().includes(name));
+    if (match) return match;
+  }
+
+  // Αλλιώς οποιαδήποτε φωνή με "female" στο όνομα
+  const anyFemale = gbVoices.find((v) => v.name.toLowerCase().includes('female'));
+  if (anyFemale) return anyFemale;
+
+  // Αλλιώς η πρώτη διαθέσιμη en-GB φωνή
+  return gbVoices[0] || null;
+}
+
+function speakReply(text, isClosing) {
+  setState('speaking');
+  showSubtitle(text);
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'en-GB';
+  const voice = pickBritishFemaleVoice();
+  if (voice) utter.voice = voice;
+
+  utter.onend = () => {
+    if (isClosing) {
+      goIdle();
+    } else {
+      startListening();
+    }
+  };
+  utter.onerror = () => {
+    if (isClosing) goIdle(); else startListening();
+  };
+
+  speechSynthesis.speak(utter);
+}
+
+function handleActions(actions) {
+  (actions || []).forEach((a) => {
+    if (a.action === 'open_maps') {
+      const loc = encodeURIComponent(a.args.location || '');
+      window.open(`https://www.google.com/maps/search/?api=1&query=${loc}`, '_blank');
+    } else if (a.action === 'open_image_search') {
+      const q = encodeURIComponent(a.args.query || '');
+      window.open(`https://www.google.com/search?tbm=isch&q=${q}`, '_blank');
+    }
+  });
+}
+
+function beginConversation() {
+  conversationHistory = [];
+  speakReply(WELCOME_TEXT, false);
+}
+
+function goIdle() {
+  clearSubtitle();
+  setState('idle');
+}
+
+// ============================================================
+// Slideshow mode (χωρίς Linda) -- ελεγχόμενο εξ αποστάσεως μέσω /admin
+// ============================================================
+let appMode = 'linda';
+let slidePhotos = [];
+let slideIndex = 0;
+let slideTimer;
+
+async function fetchMode() {
+  try {
+    const res = await fetch('/mode');
+    const data = await res.json();
+    return data.mode || 'linda';
+  } catch (e) {
+    return appMode;  // αν αποτύχει το δίκτυο, μένουμε όπως ήμασταν
+  }
+}
+
+async function applyMode(mode) {
+  appMode = mode;
+  if (mode === 'slideshow') {
+    document.getElementById('idle-screen').style.display = 'none';
+    await showSlideshow();
+  } else {
+    hideSlideshow();
+    goIdle();
+  }
+}
+
+async function showSlideshow() {
+  document.getElementById('slideshow-screen').style.display = 'flex';
+  if (slidePhotos.length === 0) {
+    try {
+      const res = await fetch('/photos');
+      const data = await res.json();
+      slidePhotos = data.photos || [];
+    } catch (e) { /* ignore */ }
+  }
+  if (slidePhotos.length === 0) return;
+  slideIndex = 0;
+  renderSlide();
+  clearInterval(slideTimer);
+  slideTimer = setInterval(() => {
+    slideIndex = (slideIndex + 1) % slidePhotos.length;
+    renderSlide();
+  }, 5000);
+}
+
+function renderSlide() {
+  document.getElementById('slideshow-img').src = '/static/photos/' + slidePhotos[slideIndex];
+}
+
+function hideSlideshow() {
+  clearInterval(slideTimer);
+  document.getElementById('slideshow-screen').style.display = 'none';
+}
+
+async function pollMode() {
+  const mode = await fetchMode();
+  // Αλλάζουμε mode ΜΟΝΟ όταν είμαστε σε idle -- ποτέ στη μέση συνομιλίας
+  if (mode !== appMode && (currentState === 'idle')) {
+    applyMode(mode);
+  }
+  setTimeout(pollMode, 8000);
+}
+
+// Αρχικός έλεγχος mode πριν δείξουμε οτιδήποτε
+(async () => {
+  const mode = await fetchMode();
+  await applyMode(mode);
+  pollMode();
+})();
+
+// ============================================================
+// Tap handling
+// ============================================================
+document.body.addEventListener('click', (e) => {
+  if (e.target.closest('#buttons') || e.target.closest('#keyboard-overlay') || e.target.closest('#accessibility-btn')) return;
+  if (appMode === 'slideshow') return;  // καμία αλληλεπίδραση με τη Linda σε slideshow mode
+
+  if (currentState === 'idle') {
+    beginConversation();
+  } else if (currentState === 'speaking') {
+    speechSynthesis.cancel();
+    startListening();
+  }
+});
+
+// ============================================================
+// Accessibility mode: touch keyboard + subtitles, ΧΩΡΙΣ μικρόφωνο
+// ============================================================
+function startAccessibilityMode() {
+  conversationHistory = [];
+  document.getElementById('keyboard-overlay').style.display = 'block';
+  document.getElementById('accessibility-btn').style.display = 'none';
+
+  const box = document.getElementById('subtitle-box');
+  const overlay = document.getElementById('keyboard-overlay');
+  box.classList.remove('floating');
+  overlay.insertBefore(box, overlay.firstChild);
+
+  showSubtitle("Hi, I'm Linda, the AI assistant here. Type your question below and my answer will appear right here.");
+  setState('listening');
+}
+
+function hideAccessibilityUI() {
+  document.getElementById('keyboard-overlay').style.display = 'none';
+  document.getElementById('text-input').value = '';
+
+  const box = document.getElementById('subtitle-box');
+  box.classList.add('floating');
+  document.body.insertBefore(box, document.getElementById('buttons'));
+  clearSubtitle();
+}
+
+function exitAccessibilityMode() {
+  hideAccessibilityUI();
+  goIdle();
+}
+
+function sendTextInput() {
+  const input = document.getElementById('text-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  sendToBackend({ textInput: text });
+}
+
+const KEY_ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+const kb = document.getElementById('virtual-keyboard');
+KEY_ROWS.forEach((row) => {
+  const rowDiv = document.createElement('div');
+  rowDiv.className = 'kb-row';
+  row.split('').forEach((letter) => {
+    const key = document.createElement('button');
+    key.textContent = letter;
+    key.className = 'kb-key';
+    key.onclick = (e) => { e.stopPropagation(); document.getElementById('text-input').value += letter.toLowerCase(); };
+    rowDiv.appendChild(key);
+  });
+  kb.appendChild(rowDiv);
+});
+const utilRow = document.createElement('div');
+utilRow.className = 'kb-row';
+const backKey = document.createElement('button');
+backKey.textContent = '⌫';
+backKey.className = 'kb-key';
+backKey.onclick = (e) => { e.stopPropagation(); const el = document.getElementById('text-input'); el.value = el.value.slice(0, -1); };
+const spaceKey = document.createElement('button');
+spaceKey.textContent = 'Space';
+spaceKey.className = 'kb-key kb-space';
+spaceKey.onclick = (e) => { e.stopPropagation(); document.getElementById('text-input').value += ' '; };
+utilRow.appendChild(backKey);
+utilRow.appendChild(spaceKey);
+kb.appendChild(utilRow);
+</script>
+</body>
+</html>

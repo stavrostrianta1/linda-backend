@@ -20,13 +20,43 @@ Environment variables που χρειάζεται (τα βάζεις στο Rend
 
 import os
 import json
+import time
+from collections import defaultdict, deque
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 
 app = FastAPI()
+
+# ------------------------------------------------------------------
+# Απλό rate limiting -- προστασία από κατάχρηση/υπερβολικό κόστος OpenAI
+# (in-memory, αρκετό για ένα kiosk· δεν επιβιώνει restart, ok για τη χρήση μας)
+# ------------------------------------------------------------------
+RATE_LIMIT_WINDOW = 60          # δευτερόλεπτα
+RATE_LIMIT_MAX_CONVERSE = 15    # ανά IP ανά λεπτό -- αρκετό για κανονική χρήση kiosk
+RATE_LIMIT_MAX_SETMODE = 5
+
+_request_log = defaultdict(deque)
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_rate_limit(key: str, max_requests: int) -> bool:
+    now = time.time()
+    log = _request_log[key]
+    while log and now - log[0] > RATE_LIMIT_WINDOW:
+        log.popleft()
+    if len(log) >= max_requests:
+        return False
+    log.append(now)
+    return True
 
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -291,7 +321,11 @@ async def get_mode():
 
 
 @app.post("/set-mode")
-async def set_mode(mode: str = Form(...), key: str = Form(...)):
+async def set_mode(request: Request, mode: str = Form(...), key: str = Form(...)):
+    client_ip = _get_client_ip(request)
+    if not _check_rate_limit(f"setmode:{client_ip}", RATE_LIMIT_MAX_SETMODE):
+        return JSONResponse(status_code=429, content={"error": "rate_limited"})
+
     if not ADMIN_KEY or key != ADMIN_KEY:
         return {"error": "unauthorized"}
     if mode not in ("linda", "slideshow"):
@@ -314,6 +348,7 @@ async def list_photos():
 
 @app.post("/converse")
 async def converse(
+    request: Request,
     history: str = Form("[]"),
     text: str = Form(None),
     audio: UploadFile = File(None),
@@ -322,6 +357,10 @@ async def converse(
     (text, στο accessibility mode), μαζί με το ιστορικό της συνομιλίας μέχρι
     τώρα (το κρατάει ο browser, όχι ο server -- stateless). Επιστρέφει την
     απάντηση σε κείμενο + το ενημερωμένο ιστορικό."""
+    client_ip = _get_client_ip(request)
+    if not _check_rate_limit(f"converse:{client_ip}", RATE_LIMIT_MAX_CONVERSE):
+        return JSONResponse(status_code=429, content={"error": "rate_limited"})
+
     try:
         prior_history = json.loads(history)
     except json.JSONDecodeError:

@@ -242,6 +242,7 @@ let silenceTimer, noSpeechTimer, maxTimer;
 let hasSpoken = false;
 let forceStopForModeSwitch = false;
 let suppressContinuation = false;
+let activeConverseController = null;
 
 function pickMimeType() {
   const candidates = ['audio/mp4', 'audio/webm', 'audio/aac'];
@@ -333,22 +334,31 @@ async function sendToBackend({ audioBlob, textInput }) {
     formData.append('text', textInput);
   }
 
+  const controller = new AbortController();
+  activeConverseController = controller;
+
   try {
-    const res = await fetch('/converse', { method: 'POST', body: formData });
+    const res = await fetch('/converse', { method: 'POST', body: formData, signal: controller.signal });
+    if (appMode !== 'linda') return;  // άλλαξε mode όσο περιμέναμε -- αγνόησε την απάντηση
+
     const data = await res.json();
+    if (appMode !== 'linda') return;
+
     conversationHistory = data.history || [];
     handleActions(data.actions);
 
     if (data.reply_text) {
       speakReply(data.reply_text, false);
     } else if (audioBlob) {
-      // Δεν κατάλαβε τίποτα -- ξανακούει χωρίς να πει τίποτα
       startListening();
     }
   } catch (e) {
+    if (e.name === 'AbortError') return;  // ακυρώθηκε επίτηδες λόγω αλλαγής mode
     console.error('[backend error]', e);
-    showSubtitle("Sorry, I'm having trouble connecting right now.");
-    goIdle();
+    if (appMode === 'linda') {
+      showSubtitle("Sorry, I'm having trouble connecting right now.");
+      goIdle();
+    }
   }
 }
 
@@ -492,6 +502,10 @@ function hardInterruptForSlideshow() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     forceStopForModeSwitch = true;
     mediaRecorder.stop();
+  }
+  if (activeConverseController) {
+    activeConverseController.abort();
+    activeConverseController = null;
   }
   clearTimeout(silenceTimer);
   clearTimeout(noSpeechTimer);

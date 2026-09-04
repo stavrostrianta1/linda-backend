@@ -241,6 +241,7 @@ let mediaRecorder, audioChunks, audioContext, analyser, dataArray;
 let silenceTimer, noSpeechTimer, maxTimer;
 let hasSpoken = false;
 let forceStopForModeSwitch = false;
+let suppressContinuation = false;
 
 function pickMimeType() {
   const candidates = ['audio/mp4', 'audio/webm', 'audio/aac'];
@@ -387,6 +388,7 @@ function speakReply(text, isClosing) {
   if (voice) utter.voice = voice;
 
   utter.onend = () => {
+    if (suppressContinuation) { suppressContinuation = false; return; }
     if (isClosing) {
       goIdle();
     } else {
@@ -394,6 +396,7 @@ function speakReply(text, isClosing) {
     }
   };
   utter.onerror = () => {
+    if (suppressContinuation) { suppressContinuation = false; return; }
     if (isClosing) goIdle(); else startListening();
   };
 
@@ -484,6 +487,7 @@ function hideSlideshow() {
 }
 
 function hardInterruptForSlideshow() {
+  suppressContinuation = true;
   speechSynthesis.cancel();
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     forceStopForModeSwitch = true;

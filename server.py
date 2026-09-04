@@ -174,7 +174,7 @@ def action_web_search(query: str) -> str:
     if not OPENAI_API_KEY:
         return "SEARCH_TOOL_ERROR: OPENAI_API_KEY is not set."
     web_search_tool = {
-        "type": "web_search",
+        "type": "web_search_preview",
         "user_location": {
             "type": "approximate",
             "approximate": {"city": USER_LOCATION_CITY, "country": USER_LOCATION_COUNTRY},
@@ -187,7 +187,14 @@ def action_web_search(query: str) -> str:
         return getattr(response, "output_text", None) or "SEARCH_TOOL_ERROR: empty response."
     except Exception as e:
         print(f"[web_search tool error]: {type(e).__name__}: {e}")
-        return f"SEARCH_TOOL_ERROR: {type(e).__name__}: {e}"
+        try:
+            response = client.responses.create(
+                model=OPENAI_SEARCH_MODEL, tools=[{"type": "web_search_preview"}], input=query,
+            )
+            return getattr(response, "output_text", None) or "SEARCH_TOOL_ERROR: empty response."
+        except Exception as e2:
+            print(f"[web_search tool error, retry]: {type(e2).__name__}: {e2}")
+            return f"SEARCH_TOOL_ERROR: {type(e2).__name__}: {e2}"
 
 
 ACTION_DISPATCH = {

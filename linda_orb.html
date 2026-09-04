@@ -240,6 +240,7 @@ let conversationHistory = [];
 let mediaRecorder, audioChunks, audioContext, analyser, dataArray;
 let silenceTimer, noSpeechTimer, maxTimer;
 let hasSpoken = false;
+let forceStopForModeSwitch = false;
 
 function pickMimeType() {
   const candidates = ['audio/mp4', 'audio/webm', 'audio/aac'];
@@ -276,6 +277,10 @@ async function startListening() {
   mediaRecorder.onstop = () => {
     stream.getTracks().forEach((t) => t.stop());
     if (audioContext) audioContext.close();
+    if (forceStopForModeSwitch) {
+      forceStopForModeSwitch = false;
+      return;  // διακόπηκε λόγω αλλαγής σε slideshow -- μην στείλεις τίποτα
+    }
     if (hasSpoken && audioChunks.length > 0) {
       sendToBackend({ audioBlob: new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' }) });
     } else {
@@ -474,13 +479,26 @@ function hideSlideshow() {
   document.getElementById('slideshow-screen').style.display = 'none';
 }
 
+function hardInterruptForSlideshow() {
+  speechSynthesis.cancel();
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    forceStopForModeSwitch = true;
+    mediaRecorder.stop();
+  }
+  clearTimeout(silenceTimer);
+  clearTimeout(noSpeechTimer);
+  clearTimeout(maxTimer);
+}
+
 async function pollMode() {
   const mode = await fetchMode();
-  // Αλλάζουμε mode ΜΟΝΟ όταν είμαστε σε idle -- ποτέ στη μέση συνομιλίας
-  if (mode !== appMode && (currentState === 'idle')) {
+  if (mode !== appMode) {
+    if (mode === 'slideshow') {
+      hardInterruptForSlideshow();
+    }
     applyMode(mode);
   }
-  setTimeout(pollMode, 8000);
+  setTimeout(pollMode, 5000);
 }
 
 // Αρχικός έλεγχος mode πριν δείξουμε οτιδήποτε

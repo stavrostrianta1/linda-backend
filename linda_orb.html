@@ -444,6 +444,10 @@ async function applyMode(mode) {
   appMode = mode;
   if (mode === 'slideshow') {
     document.getElementById('idle-screen').style.display = 'none';
+    document.getElementById('buttons').style.display = 'none';
+    document.getElementById('accessibility-btn').style.display = 'none';
+    hideAccessibilityUI();
+    clearSubtitle();
     await showSlideshow();
   } else {
     hideSlideshow();

@@ -202,33 +202,10 @@ sphere.position.y = 0.6;
 sphere.scale.set(0.82, 0.82, 0.82);
 scene.add(sphere);
 
-let animTime = 0;
-let currentScale = 0.82;
-const BASE_SCALE = 0.82;
-
 function animate() {
   requestAnimationFrame(animate);
-  animTime += 0.016;
-
   const targetColor = STATE_COLORS[currentState] || STATE_COLORS.idle;
   material.color.lerp(targetColor, 0.06);
-
-  let targetScale = BASE_SCALE;
-  if (currentState === 'idle') {
-    targetScale = BASE_SCALE + Math.sin(animTime * 0.6) * 0.025;               // απαλή "αναπνοή"
-  } else if (currentState === 'listening') {
-    targetScale = BASE_SCALE + Math.min(liveMicLevel * 2.2, 0.28);              // αντιδρά στην πραγματική σου φωνή
-  } else if (currentState === 'thinking') {
-    targetScale = BASE_SCALE + Math.sin(animTime * 3) * 0.05 + Math.sin(animTime * 5.3) * 0.02;  // "κύματα" σκέψης
-  } else if (currentState === 'speaking') {
-    targetScale = BASE_SCALE + Math.abs(Math.sin(animTime * 8)) * 0.06;         // ενεργητικός παλμός ομιλίας
-  }
-
-  currentScale += (targetScale - currentScale) * 0.15;  // ομαλή μετάβαση, χωρίς απότομα τινάγματα
-  sphere.scale.set(currentScale, currentScale, currentScale);
-
-  liveMicLevel *= 0.9;  // απαλή απόσβεση ώστε να μη "κολλάει" όταν σταματήσει η ακρόαση
-
   sphere.rotation.y += 0.004;
   sphere.rotation.x += 0.0012;
   renderer.render(scene, camera);
@@ -266,7 +243,6 @@ let hasSpoken = false;
 let forceStopForModeSwitch = false;
 let suppressContinuation = false;
 let activeConverseController = null;
-let liveMicLevel = 0;
 
 // -------- Voice barge-in: ακούει ΕΝΩ μιλάει η Linda, διακόπτει αν μιλήσεις --------
 let bargeInStream, bargeInContext, bargeInAnalyser, bargeInDataArray, bargeInRAF;
@@ -403,7 +379,6 @@ function monitorVolume() {
     sum += v * v;
   }
   const rms = Math.sqrt(sum / dataArray.length);
-  liveMicLevel = rms;
 
   if (rms > SILENCE_THRESHOLD) {
     hasSpoken = true;

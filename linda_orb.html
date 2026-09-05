@@ -100,8 +100,8 @@
 
   #interrupt-hint {
     display:none; position:fixed; top:20px; left:20px; z-index:12;
-    color:#9ac8d6; font-family: 'Poppins', sans-serif; font-size:14px;
-    max-width:260px; line-height:1.4; pointer-events:none;
+    color:#9ac8d6; font-family: 'Poppins', sans-serif; font-size:22px;
+    max-width:340px; line-height:1.4; pointer-events:none;
   }
 </style>
 </head>
@@ -178,7 +178,7 @@ function setState(s) {
   } else if (document.getElementById('keyboard-overlay').style.display !== 'block') {
     accBtn.style.display = 'block';
   }
-  document.getElementById('interrupt-hint').style.display = (s === 'speaking') ? 'block' : 'none';
+  document.getElementById('interrupt-hint').style.display = isIdle ? 'none' : 'block';
 }
 
 const scene = new THREE.Scene();

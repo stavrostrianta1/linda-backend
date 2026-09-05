@@ -97,9 +97,17 @@
   #slideshow-img {
     max-width:100%; max-height:100%; object-fit:contain;
   }
+
+  #interrupt-hint {
+    display:none; position:fixed; top:20px; left:20px; z-index:12;
+    color:#9ac8d6; font-family: 'Poppins', sans-serif; font-size:14px;
+    max-width:260px; line-height:1.4; pointer-events:none;
+  }
 </style>
 </head>
 <body>
+
+<div id="interrupt-hint">Tap the screen if you want to interrupt Linda while she talks.</div>
 
 <div id="idle-screen">
   <div id="idle-text">Hi, I'm Linda,<br>an AI assistant.</div>
@@ -170,6 +178,7 @@ function setState(s) {
   } else if (document.getElementById('keyboard-overlay').style.display !== 'block') {
     accBtn.style.display = 'block';
   }
+  document.getElementById('interrupt-hint').style.display = (s === 'speaking') ? 'block' : 'none';
 }
 
 const scene = new THREE.Scene();
@@ -243,79 +252,6 @@ let hasSpoken = false;
 let forceStopForModeSwitch = false;
 let suppressContinuation = false;
 let activeConverseController = null;
-
-// -------- Voice barge-in: ακούει ΕΝΩ μιλάει η Linda, διακόπτει αν μιλήσεις --------
-let bargeInStream, bargeInContext, bargeInAnalyser, bargeInDataArray, bargeInRAF;
-let bargeInAboveThresholdSince = null;
-const BARGE_IN_THRESHOLD = 0.09;
-const BARGE_IN_SUSTAIN_MS = 700;
-
-async function startBargeInListener() {
-  try {
-    bargeInStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch (e) {
-    return;  // δεν δόθηκε άδεια/απέτυχε -- απλά δεν θα έχουμε barge-in αυτή τη φορά
-  }
-  if (currentState !== 'speaking') {  // πρόλαβε να τελειώσει όσο περιμέναμε την άδεια
-    bargeInStream.getTracks().forEach((t) => t.stop());
-    return;
-  }
-  bargeInContext = new (window.AudioContext || window.webkitAudioContext)();
-  const source = bargeInContext.createMediaStreamSource(bargeInStream);
-  bargeInAnalyser = bargeInContext.createAnalyser();
-  bargeInAnalyser.fftSize = 512;
-  source.connect(bargeInAnalyser);
-  bargeInDataArray = new Uint8Array(bargeInAnalyser.frequencyBinCount);
-  bargeInAboveThresholdSince = null;
-  monitorBargeIn();
-}
-
-function monitorBargeIn() {
-  if (currentState !== 'speaking' || !bargeInAnalyser) {
-    stopBargeInListener();
-    return;
-  }
-  bargeInAnalyser.getByteTimeDomainData(bargeInDataArray);
-  let sum = 0;
-  for (let i = 0; i < bargeInDataArray.length; i++) {
-    const v = (bargeInDataArray[i] - 128) / 128;
-    sum += v * v;
-  }
-  const rms = Math.sqrt(sum / bargeInDataArray.length);
-  const now = Date.now();
-
-  if (rms > BARGE_IN_THRESHOLD) {
-    if (bargeInAboveThresholdSince === null) bargeInAboveThresholdSince = now;
-    if (now - bargeInAboveThresholdSince > BARGE_IN_SUSTAIN_MS) {
-      triggerBargeIn();
-      return;
-    }
-  } else {
-    bargeInAboveThresholdSince = null;
-  }
-  bargeInRAF = requestAnimationFrame(monitorBargeIn);
-}
-
-function stopBargeInListener() {
-  if (bargeInRAF) cancelAnimationFrame(bargeInRAF);
-  bargeInRAF = null;
-  if (bargeInStream) {
-    bargeInStream.getTracks().forEach((t) => t.stop());
-    bargeInStream = null;
-  }
-  if (bargeInContext) {
-    bargeInContext.close();
-    bargeInContext = null;
-  }
-  bargeInAnalyser = null;
-}
-
-function triggerBargeIn() {
-  stopBargeInListener();
-  suppressContinuation = true;
-  speechSynthesis.cancel();
-  startListening();
-}
 
 function pickMimeType() {
   const candidates = ['audio/mp4', 'audio/webm', 'audio/aac'];
@@ -464,7 +400,6 @@ function pickBritishFemaleVoice() {
 function speakReply(text, isClosing) {
   setState('speaking');
   showSubtitle(text);
-  startBargeInListener();
 
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = 'en-GB';
@@ -472,7 +407,6 @@ function speakReply(text, isClosing) {
   if (voice) utter.voice = voice;
 
   utter.onend = () => {
-    stopBargeInListener();
     if (suppressContinuation) { suppressContinuation = false; return; }
     if (isClosing) {
       goIdle();
@@ -481,7 +415,6 @@ function speakReply(text, isClosing) {
     }
   };
   utter.onerror = () => {
-    stopBargeInListener();
     if (suppressContinuation) { suppressContinuation = false; return; }
     if (isClosing) goIdle(); else startListening();
   };
@@ -535,6 +468,7 @@ async function applyMode(mode) {
     document.getElementById('idle-screen').style.display = 'none';
     document.getElementById('buttons').style.display = 'none';
     document.getElementById('accessibility-btn').style.display = 'none';
+    document.getElementById('interrupt-hint').style.display = 'none';
     hideAccessibilityUI();
     clearSubtitle();
     await showSlideshow();
@@ -573,7 +507,6 @@ function hideSlideshow() {
 }
 
 function hardInterruptForSlideshow() {
-  stopBargeInListener();
   suppressContinuation = true;
   speechSynthesis.cancel();
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -617,7 +550,6 @@ document.body.addEventListener('click', (e) => {
   if (currentState === 'idle') {
     beginConversation();
   } else if (currentState === 'speaking') {
-    stopBargeInListener();
     suppressContinuation = true;
     speechSynthesis.cancel();
     startListening();

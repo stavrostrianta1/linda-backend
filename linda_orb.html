@@ -247,8 +247,8 @@ let activeConverseController = null;
 // -------- Voice barge-in: ακούει ΕΝΩ μιλάει η Linda, διακόπτει αν μιλήσεις --------
 let bargeInStream, bargeInContext, bargeInAnalyser, bargeInDataArray, bargeInRAF;
 let bargeInAboveThresholdSince = null;
-const BARGE_IN_THRESHOLD = 0.035;
-const BARGE_IN_SUSTAIN_MS = 250;
+const BARGE_IN_THRESHOLD = 0.09;
+const BARGE_IN_SUSTAIN_MS = 700;
 
 async function startBargeInListener() {
   try {

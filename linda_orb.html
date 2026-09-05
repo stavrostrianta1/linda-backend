@@ -244,6 +244,79 @@ let forceStopForModeSwitch = false;
 let suppressContinuation = false;
 let activeConverseController = null;
 
+// -------- Voice barge-in: ακούει ΕΝΩ μιλάει η Linda, διακόπτει αν μιλήσεις --------
+let bargeInStream, bargeInContext, bargeInAnalyser, bargeInDataArray, bargeInRAF;
+let bargeInAboveThresholdSince = null;
+const BARGE_IN_THRESHOLD = 0.035;
+const BARGE_IN_SUSTAIN_MS = 250;
+
+async function startBargeInListener() {
+  try {
+    bargeInStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    return;  // δεν δόθηκε άδεια/απέτυχε -- απλά δεν θα έχουμε barge-in αυτή τη φορά
+  }
+  if (currentState !== 'speaking') {  // πρόλαβε να τελειώσει όσο περιμέναμε την άδεια
+    bargeInStream.getTracks().forEach((t) => t.stop());
+    return;
+  }
+  bargeInContext = new (window.AudioContext || window.webkitAudioContext)();
+  const source = bargeInContext.createMediaStreamSource(bargeInStream);
+  bargeInAnalyser = bargeInContext.createAnalyser();
+  bargeInAnalyser.fftSize = 512;
+  source.connect(bargeInAnalyser);
+  bargeInDataArray = new Uint8Array(bargeInAnalyser.frequencyBinCount);
+  bargeInAboveThresholdSince = null;
+  monitorBargeIn();
+}
+
+function monitorBargeIn() {
+  if (currentState !== 'speaking' || !bargeInAnalyser) {
+    stopBargeInListener();
+    return;
+  }
+  bargeInAnalyser.getByteTimeDomainData(bargeInDataArray);
+  let sum = 0;
+  for (let i = 0; i < bargeInDataArray.length; i++) {
+    const v = (bargeInDataArray[i] - 128) / 128;
+    sum += v * v;
+  }
+  const rms = Math.sqrt(sum / bargeInDataArray.length);
+  const now = Date.now();
+
+  if (rms > BARGE_IN_THRESHOLD) {
+    if (bargeInAboveThresholdSince === null) bargeInAboveThresholdSince = now;
+    if (now - bargeInAboveThresholdSince > BARGE_IN_SUSTAIN_MS) {
+      triggerBargeIn();
+      return;
+    }
+  } else {
+    bargeInAboveThresholdSince = null;
+  }
+  bargeInRAF = requestAnimationFrame(monitorBargeIn);
+}
+
+function stopBargeInListener() {
+  if (bargeInRAF) cancelAnimationFrame(bargeInRAF);
+  bargeInRAF = null;
+  if (bargeInStream) {
+    bargeInStream.getTracks().forEach((t) => t.stop());
+    bargeInStream = null;
+  }
+  if (bargeInContext) {
+    bargeInContext.close();
+    bargeInContext = null;
+  }
+  bargeInAnalyser = null;
+}
+
+function triggerBargeIn() {
+  stopBargeInListener();
+  suppressContinuation = true;
+  speechSynthesis.cancel();
+  startListening();
+}
+
 function pickMimeType() {
   const candidates = ['audio/mp4', 'audio/webm', 'audio/aac'];
   for (const c of candidates) {
@@ -391,6 +464,7 @@ function pickBritishFemaleVoice() {
 function speakReply(text, isClosing) {
   setState('speaking');
   showSubtitle(text);
+  startBargeInListener();
 
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = 'en-GB';
@@ -398,6 +472,7 @@ function speakReply(text, isClosing) {
   if (voice) utter.voice = voice;
 
   utter.onend = () => {
+    stopBargeInListener();
     if (suppressContinuation) { suppressContinuation = false; return; }
     if (isClosing) {
       goIdle();
@@ -406,6 +481,7 @@ function speakReply(text, isClosing) {
     }
   };
   utter.onerror = () => {
+    stopBargeInListener();
     if (suppressContinuation) { suppressContinuation = false; return; }
     if (isClosing) goIdle(); else startListening();
   };
@@ -497,6 +573,7 @@ function hideSlideshow() {
 }
 
 function hardInterruptForSlideshow() {
+  stopBargeInListener();
   suppressContinuation = true;
   speechSynthesis.cancel();
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -540,6 +617,8 @@ document.body.addEventListener('click', (e) => {
   if (currentState === 'idle') {
     beginConversation();
   } else if (currentState === 'speaking') {
+    stopBargeInListener();
+    suppressContinuation = true;
     speechSynthesis.cancel();
     startListening();
   }
